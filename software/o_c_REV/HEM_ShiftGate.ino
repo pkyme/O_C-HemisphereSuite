@@ -11,10 +11,18 @@ public:
             length[ch] = 4;
             trigger[ch] = ch;
             reg[ch] = random(0, 0xffff);
+            position[ch] = 0;
         }
     }
 
     void Controller() {
+        if (Clock(1)) {
+            ForEachChannel(ch)
+            {
+                ShiftLeftRegister(ch, -position[ch]);
+            }
+        }
+
         if (Clock(0)) StartADCLag();
 
         if (EndOfADCLag()) {
@@ -22,8 +30,8 @@ public:
             {
                 // Grab the bit that's about to be shifted away
                 int last = (reg[ch] >> (length[ch] - 1)) & 0x01;
-
-                if (!Clock(1)) { // Digital 2 freezes the buffer
+                if (true) {
+                //if (!Clock(1)) { // Digital 2 freezes the buffer
                     // XOR the incoming one-bit data with the high bit to get a new value
                     bool data = In(ch) > HEMISPHERE_3V_CV ? 0x01 : 0x00;
                     last = (data != last);
@@ -31,6 +39,7 @@ public:
 
                 // Shift left, then potentially add the bit from the other side
                 reg[ch] = (reg[ch] << 1) + last;
+                position[ch] = (position[ch] + 1) % length[ch];
 
                 bool clock = reg[ch] & 0x01;
                 if (trigger[ch]) {
@@ -53,7 +62,7 @@ public:
     void OnEncoderMove(int direction) {
         byte ch = cursor > 1 ? 1 : 0;
         byte c = cursor > 1 ? cursor - 2 : cursor;
-        if (c == 0) length[ch] = constrain(length[ch] + direction, 1, 16);
+        if (c == 0) SetLength(ch, length[ch] + direction);
         if (c == 1) trigger[ch] = 1 - trigger[ch];
     }
         
@@ -92,6 +101,7 @@ private:
     // Settings
     int8_t length[2]; // 1-16
     bool trigger[2]; // 0=Gate, 1=Trigger
+    int position[2];
 
     void DrawInterface() {
         gfxIcon(1, 14, LOOP_ICON);
@@ -119,6 +129,24 @@ private:
             }
         }
     }
+
+    void ShiftLeftRegister(int ch, int n) {
+        if (n >= 0) {
+            reg[ch] = (reg[ch] << n) | ((reg[ch] >> (length[ch] - n)) & ((1 << n) - 1));
+        } else {
+            // Rotate right and mask out the bits rotated in
+            reg[ch] = ((reg[ch] >> -n) & ~(((1 << -n) - 1) << (length[ch] + n)))
+                   | (reg[ch] & ((1 << -n) - 1)) << (length[ch] + n)
+                   | (reg[ch] << (16 + n));
+        }
+        position[ch] = ( position[ch] + n ) % length[ch]; 
+    }
+
+    void SetLength(int ch, int l) {
+        length[ch] = constrain(l, 1, 16);
+        position[ch] %= length[ch];
+    }
+
 };
 
 

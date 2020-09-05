@@ -48,6 +48,7 @@ public:
         if (Clock(1)) {
             tm_state.Reset();
             length = tm_state.GetLength();
+            for(int i = 0; i < offset; i++) tm_state.Advance(0);
         }
 
         // If a clock is present, advance the TuringMachineState
@@ -74,7 +75,7 @@ public:
     }
 
     void OnButtonPress() {
-        if (++cursor > 3) cursor = 0;
+        if (++cursor > 5) cursor = 0;
     }
 
     void OnEncoderMove(int direction) {
@@ -84,10 +85,18 @@ public:
             if (prev_tm != new_tm) SwitchTuringMachine(new_tm);
         } else if (cursor ==1) { // Probability
             p = constrain(p + direction, 0, 100);
-        } else { // Output assign
-            byte o = cursor - 2; // Which output
+        } else if ( cursor==4 || cursor==5 ) { // Output assign
+            byte o = cursor - 4; // Which output
             if (output[o].type() > 0 || direction > 0)
                 output[o].set_type(output[o].type() + direction);
+        } else if (cursor == 2) {
+            // adjust length
+            tm_state.ChangeLength(direction);
+        } else if (cursor == 3) {
+            // adjust offset
+            offset = constrain(offset += direction, 0, tm_state.GetLength()-1);
+            if (direction < 0) direction += tm_state.GetLength();
+            for(int i = 0; i < direction; i++) tm_state.Advance(0);
         }
     }
         
@@ -113,7 +122,7 @@ protected:
         help[HEMISPHERE_HELP_DIGITALS] = "1=Clock";
         help[HEMISPHERE_HELP_CVS]      = "1=Shift 2=Organize";
         help[HEMISPHERE_HELP_OUTS]     = "Assignable";
-        help[HEMISPHERE_HELP_ENCODER]  = "Reg/Prob/Assign";
+        help[HEMISPHERE_HELP_ENCODER]  = "Reg/P/Len/Rot/Assn";
         //                               "------------------" <-- Size Guide
     }
     
@@ -125,6 +134,7 @@ private:
     int8_t p = 0;
     EnigmaOutput output[2];
     TuringMachineState tm_state;
+    int offset;
 
     void DrawInterface() {
         // First line: TM and Probability
@@ -132,7 +142,8 @@ private:
         HS::TuringMachine::SetName(name, tm_state.GetTMIndex());
         gfxPrint(1, 15, name);
         if (tm_state.IsFavorite()) gfxIcon(20, 15, FAVORITE_ICON);
-        if (cursor == 0) {
+        if (0) {
+//        if (cursor == 0) {
             // If the Turing Machine is being selected, display the length and favorite
             // status instead of the probability
             byte length = tm_state.GetLength();
@@ -146,23 +157,36 @@ private:
             gfxPrint(pad(100, p), p);
         }
 
+        // Print length
+        byte length = tm_state.GetLength();
+        if (length > 0) {
+            gfxIcon(1, 24, LOOP_ICON);
+            gfxPrint(12 + pad(10, length), 25, length);
+        }
+
+        // Print offset
+        gfxIcon(32, 25, ROTATE_R_ICON);
+        gfxPrint(43 + pad(10, offset), 25, offset);
+
         // Second and third lines: Outputs
         ForEachChannel(ch)
         {
             byte o = 'A' + static_cast<char>(ch);
             if (hemisphere) o += 2;
             char out_name[3] = {o, ':', '\0'};
-            gfxPrint(1, 25 + (ch * 10), out_name);
+            gfxPrint(1, 35 + (ch * 10), out_name);
             gfxPrint(enigma_type_short_names[output[ch].type()]);
         }
 
         // Cursor
         if (cursor == 0) gfxCursor(1, 23, 18);
         if (cursor == 1) gfxCursor(46, 23, 18);
-        if (cursor == 2) gfxCursor(13, 33, 44);
-        if (cursor == 3) gfxCursor(13, 43, 44);
+        if (cursor == 2) gfxCursor(13, 33, 12);
+        if (cursor == 3) gfxCursor(44, 33, 12);
+        if (cursor == 4) gfxCursor(13, 43, 44);
+        if (cursor == 5) gfxCursor(13, 53, 44);
 
-        tm_state.DrawAt(hemisphere * 64, 45);
+        tm_state.DrawAt(hemisphere * 64, 55);
     }
 
     // When a new TM is selected, load it here
@@ -170,6 +194,7 @@ private:
         tm_state.Init(ix);
         tm_state.SetWriteMode(0); // Write is not allowed in EnigmaJr
         length = tm_state.GetLength();
+        offset = 0;
     }
 
     void Organize(int cv) {

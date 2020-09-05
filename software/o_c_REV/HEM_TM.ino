@@ -49,6 +49,8 @@ public:
         reg = random(0, 65535);
         p = 0;
         length = 16;
+        position = 0;
+        offset = 0;
         quant_range = 24;  //APD: Quantizer range
         cursor = 0;
         quantizer.Init();
@@ -62,15 +64,20 @@ public:
         int lengthCv = DetentedIn(0);
         if (lengthCv < 0) length = TM_MIN_LENGTH;        
         if (lengthCv > 0) {
-            length = constrain(ProportionCV(lengthCv, TM_MAX_LENGTH + 1), TM_MIN_LENGTH, TM_MAX_LENGTH);
+            SetLength(ProportionCV(lengthCv, TM_MAX_LENGTH + 1));
         }
       
         // CV 2 bi-polar modulation of probability
         int pCv = Proportion(DetentedIn(1), HEMISPHERE_MAX_CV, 100);
         
+        if (Clock(1))
+        {
+            ShiftLeftRegister(offset - position);
+        }
+
         if (Clock(0)) {
             // If the cursor is not on the p value, and Digital 2 is not gated, the sequence remains the same
-            int prob = (cursor == 1 || Gate(1)) ? p + pCv : 0;
+            int prob = (cursor == 1 ) ? p + pCv : 0;
             prob = constrain(prob, 0, 100);
 
             // Grab the bit that's about to be shifted away
@@ -81,7 +88,9 @@ public:
 
             // Shift left, then potentially add the bit from the other side
             reg = (reg << 1) + last;
+            position = ( position + 1 ) % length;
         }
+
  
         // Send 5-bit quantized CV
         int32_t note = reg & 0x1f;
@@ -108,11 +117,11 @@ public:
     }
 
     void OnButtonPress() {
-        if (++cursor > 3) cursor = 0;
+        if (++cursor > 4) cursor = 0;
     }
 
     void OnEncoderMove(int direction) {
-        if (cursor == 0) length = constrain(length += direction, TM_MIN_LENGTH, TM_MAX_LENGTH);
+        if (cursor == 0) SetLength(length += direction);
         if (cursor == 1) p = constrain(p += direction, 0, 100);
         if (cursor == 2) {
             scale += direction;
@@ -122,6 +131,11 @@ public:
         }
         if(cursor == 3){
            quant_range = constrain(quant_range += direction, 1, 32);
+        }
+        if(cursor == 4){
+            int offsetPrev = offset;
+            offset = constrain(offset += direction, 0, length-1);
+            ShiftLeftRegister(offset - offsetPrev);
         }
     }
         
@@ -149,16 +163,17 @@ public:
 protected:
     void SetHelp() {
         //                               "------------------" <-- Size Guide
-        help[HEMISPHERE_HELP_DIGITALS] = "1=Clock 2=p Gate";
+        help[HEMISPHERE_HELP_DIGITALS] = "1=Clock 2=Reset";
         help[HEMISPHERE_HELP_CVS]      = "1=Length 2=p Mod";
         help[HEMISPHERE_HELP_OUTS]     = "A=Quant5-bit B=CV8";
-        help[HEMISPHERE_HELP_ENCODER]  = "Len/Prob/Scl/Range";
+        help[HEMISPHERE_HELP_ENCODER]  = "Len/p/Scl/Rang/Rot";
         //                               "------------------" <-- Size Guide
     }
     
 private:
     int length; // Sequence length
     int cursor;  // 0 = length, 1 = p, 2 = scale
+    int position;
     braids::Quantizer quantizer;
 
     // Settings
@@ -168,12 +183,13 @@ private:
     int scale;  // Logarhythm: hold larger values
     //int tmp = 0;
     int quant_range;  // APD
+    int offset;
 
     void DrawSelector() {
         gfxBitmap(1, 14, 8, LOOP_ICON);
         gfxPrint(12 + pad(10, length), 15, length);
         gfxPrint(32, 15, "p=");
-        if (cursor == 1 || Gate(1)) {
+        if (cursor == 1) {
             int pCv = Proportion(DetentedIn(1), HEMISPHERE_MAX_CV, 100);
             int prob = constrain(p + pCv, 0, 100);
             if (cursor == 1) gfxCursor(45, 23, 18); // Probability Cursor
@@ -186,10 +202,15 @@ private:
         gfxBitmap(41, 24, 8, NOTE4_ICON);
         gfxPrint(49, 25, quant_range); // APD
 
+        gfxBitmap(1, 35, 8, ROTATE_R_ICON);
+        gfxPrint(12 + pad(10, offset), 35, offset);
+
         //gfxPrint(1, 35, tmp);
         if (cursor == 0) gfxCursor(13, 23, 12); // Length Cursor
         if (cursor == 2) gfxCursor(13, 33, 30); // Scale Cursor
         if (cursor == 3) gfxCursor(49, 33, 14); // Quant Range Cursor // APD
+        if (cursor == 4) gfxCursor(13, 43, 12); // Offset
+
     }
 
     void DrawIndicator() {
@@ -211,6 +232,24 @@ private:
         reg = (reg << 1) + last;
     }
 
+    void ShiftLeftRegister(int n) {
+        if (n >= 0) {
+            reg = (reg << n) | ((reg >> (length - n)) & ((1 << n) - 1));
+        } else {
+            // Rotate right and mask out the bits rotated in
+            reg = ((reg >> -n) & ~(((1 << -n) - 1) << (length + n)))
+                   | (reg & ((1 << -n) - 1)) << (length + n)
+                   | (reg << (TM_MAX_LENGTH + n));
+        }
+
+        position = ( position + n ) % length; 
+    }
+
+    void SetLength(int l) {
+        length = constrain(l, TM_MIN_LENGTH, TM_MAX_LENGTH);
+        position %= length;
+        offset %= length;
+    }
 };
 
 
