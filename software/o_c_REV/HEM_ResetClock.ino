@@ -41,6 +41,7 @@ public:
     void Controller() {
         if (Clock(1)) {
             pending_clocks += (length - position + offset) % length;
+            ClockOut(1);
         }
 
         if (Clock(0)) pending_clocks++;
@@ -102,7 +103,7 @@ protected:
         //                               "------------------" <-- Size Guide
         help[HEMISPHERE_HELP_DIGITALS] = "Clock, Reset";
         help[HEMISPHERE_HELP_CVS]      = "";
-        help[HEMISPHERE_HELP_OUTS]     = "Clock";
+        help[HEMISPHERE_HELP_OUTS]     = "Clock, Reset";
         help[HEMISPHERE_HELP_ENCODER]  = "Len/Offst/Spac/Pos";
         //                               "------------------" <-- Size Guide
     }
