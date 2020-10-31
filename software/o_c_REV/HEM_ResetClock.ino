@@ -25,7 +25,7 @@ class ResetClock : public HemisphereApplet {
 public:
 
     const char* applet_name() {
-        return "ResetClock";
+        return "ResetClk";
     }
 
     void Start() {
@@ -136,26 +136,26 @@ private:
         if (cursor == 0) gfxCursor(13, 23, 12); // length
         if (cursor == 1) gfxCursor(41, 23, 12); // offset
         if (cursor == 2) gfxCursor(13, 33, 12); // spacing
-        if (cursor == 3) gfxCursor(1, 62, 62); // position
+        if (cursor == 3) gfxCursor(0, 62, 64); // position
     }
 
     void DrawIndicator() {
         gfxLine(0, 45, 63, 45);
-        gfxLine(0, 60, 63, 60);
+        if (cursor != 3) gfxLine(0, 62, 63, 62);
         for(int i = 0; i < length; i++)
         {
             int x0 = (i*64)/length;
             int width = ((i+1)*64)/length - x0;
             if (position == i)
             {
-                gfxRect(x0, 45, width, 15);
+                gfxRect(x0, 46, width, 16);
             }
             else
             {
-                gfxLine(x0, 45, x0, 60);
+                gfxLine(x0, 46, x0, 61);
             }  
         }
-        gfxLine(63, 45, 63, 60);
+        gfxLine(63, 46, 63, 61);
     }
 
 };
